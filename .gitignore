@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+config.json
+recordings/
+screenshots/
+transcriptions.jsonl
+annotations.jsonl
+.superpowers/

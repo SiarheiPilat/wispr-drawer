@@ -1,0 +1,9 @@
+pynput
+sounddevice
+soundfile
+openai
+Pillow
+pyperclip
+pyautogui
+pystray
+numpy
