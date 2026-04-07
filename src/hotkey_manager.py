@@ -2,39 +2,46 @@ import threading
 from pynput import keyboard
 
 
-def parse_shortcut(shortcut_str: str) -> set:
-    """Parse 'ctrl+shift+a' into a set of pynput keys."""
+# Virtual key codes for letters on Windows
+_VK_CODES = {chr(i): 0x41 + i - ord('a') for i in range(ord('a'), ord('z') + 1)}
+
+
+def parse_shortcut(shortcut_str: str) -> tuple:
+    """Parse 'ctrl+shift+a' into modifier flags + a vk code for the letter."""
     parts = shortcut_str.lower().split("+")
-    keys = set()
+    modifiers = set()
+    vk = None
     for part in parts:
         part = part.strip()
-        if part == "ctrl":
-            keys.add(keyboard.Key.ctrl_l)
+        if part in ("ctrl", "control"):
+            modifiers.add("ctrl")
         elif part == "shift":
-            keys.add(keyboard.Key.shift_l)
-        elif part == "alt":
-            keys.add(keyboard.Key.alt_l)
-        elif len(part) == 1:
-            keys.add(keyboard.KeyCode.from_char(part))
+            modifiers.add("shift")
+        elif part in ("alt", "menu"):
+            modifiers.add("alt")
+        elif len(part) == 1 and part in _VK_CODES:
+            vk = _VK_CODES[part]
         else:
             try:
-                keys.add(keyboard.Key[part])
+                keyboard.Key[part]
+                modifiers.add(part)
             except KeyError:
                 pass
-    return keys
+    return (frozenset(modifiers), vk)
 
 
 class HotkeyManager:
     def __init__(self):
         self._listener = None
-        self._pressed_keys = set()
-        self._bindings = {}  # shortcut_str -> {"on_press": fn, "on_release": fn}
+        self._held_modifiers = set()  # "ctrl", "shift", "alt"
+        self._held_vks = set()        # virtual key codes
+        self._bindings = {}           # shortcut_str -> {parsed, on_press, on_release}
         self._active_shortcut = None
         self._lock = threading.Lock()
 
     def register(self, shortcut_str: str, on_press, on_release):
         self._bindings[shortcut_str] = {
-            "keys": parse_shortcut(shortcut_str),
+            "parsed": parse_shortcut(shortcut_str),
             "on_press": on_press,
             "on_release": on_release,
         }
@@ -56,24 +63,42 @@ class HotkeyManager:
             self._listener.stop()
             self._listener = None
 
-    def _normalize_key(self, key):
-        """Normalize key variants (e.g., ctrl_r -> ctrl_l)."""
-        if key == keyboard.Key.ctrl_r:
-            return keyboard.Key.ctrl_l
-        if key == keyboard.Key.shift_r:
-            return keyboard.Key.shift_l
-        if key == keyboard.Key.alt_r:
-            return keyboard.Key.alt_l
-        return key
+    def _extract_info(self, key):
+        """Extract modifier name or vk code from a key event."""
+        modifier = None
+        vk = None
+        if key in (keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
+            modifier = "ctrl"
+        elif key in (keyboard.Key.shift_l, keyboard.Key.shift_r, keyboard.Key.shift):
+            modifier = "shift"
+        elif key in (keyboard.Key.alt_l, keyboard.Key.alt_r, keyboard.Key.alt_gr):
+            modifier = "alt"
+        elif hasattr(key, 'vk') and key.vk is not None:
+            vk = key.vk
+        return modifier, vk
+
+    def _check_match(self, modifiers_needed, vk_needed):
+        """Check if the currently held keys satisfy a binding."""
+        if not modifiers_needed.issubset(self._held_modifiers):
+            return False
+        if vk_needed is not None and vk_needed not in self._held_vks:
+            return False
+        return True
 
     def _on_press(self, key):
-        key = self._normalize_key(key)
+        modifier, vk = self._extract_info(key)
         with self._lock:
-            self._pressed_keys.add(key)
+            if modifier:
+                self._held_modifiers.add(modifier)
+            if vk is not None:
+                self._held_vks.add(vk)
+
             if self._active_shortcut:
-                return  # Already activated, ignore additional presses
+                return
+
             for shortcut_str, binding in self._bindings.items():
-                if binding["keys"].issubset(self._pressed_keys):
+                mods, bvk = binding["parsed"]
+                if self._check_match(mods, bvk):
                     self._active_shortcut = shortcut_str
                     try:
                         binding["on_press"]()
@@ -82,19 +107,20 @@ class HotkeyManager:
                     return
 
     def _on_release(self, key):
-        key = self._normalize_key(key)
+        modifier, vk = self._extract_info(key)
         with self._lock:
-            self._pressed_keys.discard(key)
-            # Also discard the un-normalized version
-            if hasattr(key, 'char'):
-                self._pressed_keys.discard(key)
+            if modifier:
+                self._held_modifiers.discard(modifier)
+            if vk is not None:
+                self._held_vks.discard(vk)
 
             if self._active_shortcut:
                 binding = self._bindings.get(self._active_shortcut)
-                if binding and not binding["keys"].issubset(self._pressed_keys):
-                    shortcut = self._active_shortcut
-                    self._active_shortcut = None
-                    try:
-                        binding["on_release"]()
-                    except Exception as e:
-                        print(f"Error in hotkey release handler: {e}")
+                if binding:
+                    mods, bvk = binding["parsed"]
+                    if not self._check_match(mods, bvk):
+                        self._active_shortcut = None
+                        try:
+                            binding["on_release"]()
+                        except Exception as e:
+                            print(f"Error in hotkey release handler: {e}")

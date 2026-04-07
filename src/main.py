@@ -16,6 +16,7 @@ from clipboard_util import copy_to_clipboard, type_at_caret
 from transcript_log import append_transcription, append_annotation
 from hotkey_manager import HotkeyManager
 from settings_ui import SettingsWindow
+from toast import show_toast
 
 try:
     import pystray
@@ -158,15 +159,17 @@ class WisprDrawer:
             # Clipboard
             if self.config.get("copy_to_clipboard"):
                 copy_to_clipboard(text)
-                print("Copied to clipboard.")
 
             # Insert at caret
             if self.config.get("insert_at_caret"):
                 type_at_caret(text)
-                print("Inserted at caret.")
+
+            preview = text[:80] + "..." if len(text) > 80 else text
+            show_toast(f"Transcription saved: {preview}")
 
         except Exception as e:
             print(f"Voice memo error: {e}")
+            show_toast(f"Voice memo failed: {e}")
             append_transcription(self.project_dir, f"[transcription failed: {e}]")
 
     # ── Feature B: Annotated Screenshot ──
@@ -214,8 +217,12 @@ class WisprDrawer:
             # Log annotation
             append_annotation(self.project_dir, text, screenshot_path)
 
+            preview = text[:60] + "..." if len(text) > 60 else text
+            show_toast(f"Screenshot saved with annotation: {preview}")
+
         except Exception as e:
             print(f"Screenshot error: {e}")
+            show_toast(f"Screenshot failed: {e}")
 
     # ── System Tray ──
 
