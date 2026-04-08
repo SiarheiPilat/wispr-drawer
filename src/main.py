@@ -18,6 +18,7 @@ from hotkey_manager import HotkeyManager
 from settings_ui import SettingsWindow
 from toast import show_toast
 from wake_word import WakeWordListener
+from claude_actor import send_to_claude
 
 try:
     import pystray
@@ -144,7 +145,30 @@ class WisprDrawer:
 
     def _on_wake_command(self, audio_data):
         """Handle voice command captured after wake word."""
-        self._process_voice_memo(audio_data)
+        mode = self.config.get("wake_word_mode")
+        if mode == "ai_actor":
+            self._process_ai_actor(audio_data)
+        else:
+            self._process_voice_memo(audio_data)
+
+    def _process_ai_actor(self, audio_data):
+        """Transcribe voice command and send it to Claude Code."""
+        try:
+            if AudioRecorder.is_silent(audio_data):
+                print("No voice command detected.")
+                return
+
+            temp_path = self.recorder.save_temp_wav(audio_data)
+            api_key = self.config.get("openai_api_key")
+            text = transcribe(temp_path, api_key)
+            print(f"AI Actor command: {text}")
+
+            show_toast(f"Sending to Claude: {text[:60]}...")
+            send_to_claude(text, working_dir=self.project_dir)
+
+        except Exception as e:
+            print(f"AI Actor error: {e}")
+            show_toast(f"AI Actor failed: {e}")
 
     def _on_settings_saved(self):
         """Re-register hotkeys and update mic device after settings change."""
@@ -171,7 +195,7 @@ class WisprDrawer:
         if self.wake_listener:
             self.wake_listener.resume()
 
-        if audio_data is None or len(audio_data) == 0:
+        if audio_data is None or len(audio_data) == 0 or AudioRecorder.is_silent(audio_data):
             print("No audio captured.")
             return
 
@@ -247,10 +271,12 @@ class WisprDrawer:
             screenshot_path = save_screenshot(composited, self.project_dir)
             print(f"Screenshot saved: {screenshot_path}")
 
-            # Transcribe if we have audio
-            text = "[no audio]"
+            # Transcribe if we have non-silent audio
+            text = ""
             wav_path = None
-            if audio_data is not None and len(audio_data) > 0:
+            has_audio = (audio_data is not None and len(audio_data) > 0
+                         and not AudioRecorder.is_silent(audio_data))
+            if has_audio:
                 if self.config.get("save_audio"):
                     wav_path = self.recorder.save_wav(audio_data, self.project_dir)
 

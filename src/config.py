@@ -9,6 +9,7 @@ DEFAULT_CONFIG = {
     "insert_at_caret": False,
     "save_audio": False,
     "mic_device": None,
+    "wake_word_mode": "simple_input",
     "wake_word_enabled": False,
     "wake_word_model": "hey_jarvis",
     "wake_word_sensitivity": 0.5,

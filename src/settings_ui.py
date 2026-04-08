@@ -18,7 +18,7 @@ class SettingsWindow:
 
         self._window = tk.Toplevel()
         self._window.title("Wispr Drawer — Settings")
-        self._window.geometry("450x600")
+        self._window.geometry("450x650")
         self._window.resizable(False, False)
 
         frame = ttk.Frame(self._window, padding=20)
@@ -85,33 +85,43 @@ class SettingsWindow:
             row=9, column=0, columnspan=2, sticky="w", pady=2
         )
 
-        ttk.Label(frame, text="Wake Word Model:").grid(row=10, column=0, sticky="w", pady=(0, 5))
-        self._wake_model_var = tk.StringVar(value=self.config.get("wake_word_model"))
-        ttk.Combobox(frame, textvariable=self._wake_model_var, values=BUILTIN_MODELS, width=37).grid(
+        _MODE_LABELS = {"simple_input": "Simple Input", "ai_actor": "AI Actor (Claude Code)"}
+        _MODE_VALUES = {"Simple Input": "simple_input", "AI Actor (Claude Code)": "ai_actor"}
+        ttk.Label(frame, text="Wake Word Mode:").grid(row=10, column=0, sticky="w", pady=(0, 5))
+        self._wake_mode_var = tk.StringVar(value=_MODE_LABELS.get(self.config.get("wake_word_mode"), "Simple Input"))
+        self._wake_mode_values = _MODE_VALUES
+        ttk.Combobox(frame, textvariable=self._wake_mode_var,
+                      values=list(_MODE_LABELS.values()), state="readonly", width=37).grid(
             row=10, column=1, sticky="ew", pady=(0, 5)
         )
 
-        ttk.Label(frame, text="Sensitivity:").grid(row=11, column=0, sticky="w", pady=(0, 5))
-        self._wake_sensitivity_var = tk.DoubleVar(value=self.config.get("wake_word_sensitivity"))
-        ttk.Scale(frame, from_=0.1, to=0.9, variable=self._wake_sensitivity_var, orient="horizontal").grid(
+        ttk.Label(frame, text="Wake Word Model:").grid(row=11, column=0, sticky="w", pady=(0, 5))
+        self._wake_model_var = tk.StringVar(value=self.config.get("wake_word_model"))
+        ttk.Combobox(frame, textvariable=self._wake_model_var, values=BUILTIN_MODELS, width=37).grid(
             row=11, column=1, sticky="ew", pady=(0, 5)
         )
 
-        ttk.Label(frame, text="Silence wait (sec):").grid(row=12, column=0, sticky="w", pady=(0, 5))
-        self._wake_silence_var = tk.DoubleVar(value=self.config.get("wake_word_silence_duration"))
-        ttk.Spinbox(frame, from_=0.5, to=5.0, increment=0.5, textvariable=self._wake_silence_var, width=10).grid(
-            row=12, column=1, sticky="w", pady=(0, 5)
+        ttk.Label(frame, text="Sensitivity:").grid(row=12, column=0, sticky="w", pady=(0, 5))
+        self._wake_sensitivity_var = tk.DoubleVar(value=self.config.get("wake_word_sensitivity"))
+        ttk.Scale(frame, from_=0.1, to=0.9, variable=self._wake_sensitivity_var, orient="horizontal").grid(
+            row=12, column=1, sticky="ew", pady=(0, 5)
         )
 
-        ttk.Label(frame, text="Max command (sec):").grid(row=13, column=0, sticky="w", pady=(0, 5))
+        ttk.Label(frame, text="Silence wait (sec):").grid(row=13, column=0, sticky="w", pady=(0, 5))
+        self._wake_silence_var = tk.DoubleVar(value=self.config.get("wake_word_silence_duration"))
+        ttk.Spinbox(frame, from_=0.5, to=5.0, increment=0.5, textvariable=self._wake_silence_var, width=10).grid(
+            row=13, column=1, sticky="w", pady=(0, 5)
+        )
+
+        ttk.Label(frame, text="Max command (sec):").grid(row=14, column=0, sticky="w", pady=(0, 5))
         self._wake_max_var = tk.DoubleVar(value=self.config.get("wake_word_max_duration"))
         ttk.Spinbox(frame, from_=5, to=60, increment=5, textvariable=self._wake_max_var, width=10).grid(
-            row=13, column=1, sticky="w", pady=(0, 5)
+            row=14, column=1, sticky="w", pady=(0, 5)
         )
 
         # Buttons
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=14, column=0, columnspan=2, pady=(20, 0))
+        btn_frame.grid(row=15, column=0, columnspan=2, pady=(20, 0))
         ttk.Button(btn_frame, text="Save", command=self._save).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Cancel", command=self._window.destroy).pack(side="left", padx=5)
 
@@ -140,6 +150,7 @@ class SettingsWindow:
                     break
 
         self.config.set("wake_word_enabled", self._wake_enabled_var.get())
+        self.config.set("wake_word_mode", self._wake_mode_values.get(self._wake_mode_var.get(), "simple_input"))
         self.config.set("wake_word_model", self._wake_model_var.get().strip())
         self.config.set("wake_word_sensitivity", round(self._wake_sensitivity_var.get(), 2))
         self.config.set("wake_word_silence_duration", round(self._wake_silence_var.get(), 1))

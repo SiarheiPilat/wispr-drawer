@@ -62,6 +62,12 @@ class AudioRecorder:
         sf.write(filepath, audio_data, self.sample_rate)
         return filepath
 
+    @staticmethod
+    def is_silent(audio_data: np.ndarray, threshold=0.01) -> bool:
+        """Return True if audio RMS is below threshold (i.e. just silence/noise)."""
+        rms = np.sqrt(np.mean(audio_data ** 2))
+        return rms < threshold
+
     def save_temp_wav(self, audio_data: np.ndarray) -> str:
         import tempfile
         fd, path = tempfile.mkstemp(suffix=".wav")
