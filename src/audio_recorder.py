@@ -7,13 +7,24 @@ from datetime import datetime
 
 
 class AudioRecorder:
-    def __init__(self, sample_rate=16000, channels=1):
+    def __init__(self, sample_rate=16000, channels=1, device=None):
         self.sample_rate = sample_rate
         self.channels = channels
+        self.device = device  # None = system default
         self._frames = []
         self._recording = False
         self._stream = None
         self._lock = threading.Lock()
+
+    @staticmethod
+    def list_input_devices():
+        """Return list of (index, name) for available input devices."""
+        devices = sd.query_devices()
+        result = []
+        for i, d in enumerate(devices):
+            if d['max_input_channels'] > 0:
+                result.append((i, d['name']))
+        return result
 
     def start(self):
         with self._lock:
@@ -22,6 +33,7 @@ class AudioRecorder:
         self._stream = sd.InputStream(
             samplerate=self.sample_rate,
             channels=self.channels,
+            device=self.device,
             dtype="float32",
             callback=self._callback,
         )

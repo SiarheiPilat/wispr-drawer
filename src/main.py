@@ -17,6 +17,7 @@ from transcript_log import append_transcription, append_annotation
 from hotkey_manager import HotkeyManager
 from settings_ui import SettingsWindow
 from toast import show_toast
+from wake_word import WakeWordListener
 
 try:
     import pystray
@@ -35,11 +36,12 @@ class WisprDrawer:
         self.config = Config(self.app_dir)
         self.project_dir = None
 
-        self.recorder = AudioRecorder()
+        self.recorder = AudioRecorder(device=self.config.get("mic_device"))
         self.hotkey_manager = HotkeyManager()
         self.recording_overlay = RecordingOverlay()
         self.drawing_overlay = DrawingOverlay()
         self.settings_window = SettingsWindow(self.config, on_save_callback=self._on_settings_saved)
+        self.wake_listener = None
 
         self._tray_icon = None
 
@@ -57,11 +59,16 @@ class WisprDrawer:
         print(f"Project folder: {self.project_dir}")
         print(f"Voice memo shortcut: {self.config.get('shortcut_a')}")
         print(f"Screenshot shortcut: {self.config.get('shortcut_b')}")
+        if self.config.get("wake_word_enabled"):
+            print(f"Wake word: {self.config.get('wake_word_model')} (sensitivity: {self.config.get('wake_word_sensitivity')})")
         print("Wispr Drawer is running. Use your shortcuts or right-click the tray icon.")
 
         # Register hotkeys
         self._register_hotkeys()
         self.hotkey_manager.start()
+
+        # Start wake word listener if enabled
+        self._start_wake_listener()
 
         # Start tray icon
         if HAS_TRAY:
@@ -113,17 +120,47 @@ class WisprDrawer:
             on_release=self._on_screenshot_release,
         )
 
+    def _start_wake_listener(self):
+        if self.wake_listener:
+            self.wake_listener.stop()
+            self.wake_listener = None
+
+        if not self.config.get("wake_word_enabled"):
+            return
+
+        try:
+            self.wake_listener = WakeWordListener(
+                model_name=self.config.get("wake_word_model"),
+                sensitivity=self.config.get("wake_word_sensitivity"),
+                mic_device=self.config.get("mic_device"),
+                on_command=self._on_wake_command,
+                silence_duration=self.config.get("wake_word_silence_duration"),
+                max_duration=self.config.get("wake_word_max_duration"),
+            )
+            self.wake_listener.start()
+        except Exception as e:
+            print(f"Failed to start wake word listener: {e}")
+            self.wake_listener = None
+
+    def _on_wake_command(self, audio_data):
+        """Handle voice command captured after wake word."""
+        self._process_voice_memo(audio_data)
+
     def _on_settings_saved(self):
-        """Re-register hotkeys after settings change."""
+        """Re-register hotkeys and update mic device after settings change."""
         self.hotkey_manager.stop()
         self._register_hotkeys()
         self.hotkey_manager.start()
+        self.recorder.device = self.config.get("mic_device")
+        self._start_wake_listener()
         print("Settings saved. Hotkeys re-registered.")
 
     # ── Feature A: Voice Memo ──
 
     def _on_voice_memo_press(self):
         print("Recording voice memo...")
+        if self.wake_listener:
+            self.wake_listener.pause()
         self.recording_overlay.show()
         self.recorder.start()
 
@@ -131,6 +168,8 @@ class WisprDrawer:
         print("Processing voice memo...")
         audio_data = self.recorder.stop()
         self.recording_overlay.hide()
+        if self.wake_listener:
+            self.wake_listener.resume()
 
         if audio_data is None or len(audio_data) == 0:
             print("No audio captured.")
@@ -141,6 +180,7 @@ class WisprDrawer:
     def _process_voice_memo(self, audio_data):
         try:
             # Save audio if enabled
+            wav_path = None
             if self.config.get("save_audio"):
                 wav_path = self.recorder.save_wav(audio_data, self.project_dir)
                 print(f"Audio saved: {wav_path}")
@@ -154,7 +194,7 @@ class WisprDrawer:
             print(f"Transcription: {text}")
 
             # Log
-            append_transcription(self.project_dir, text)
+            append_transcription(self.project_dir, text, audio_path=wav_path)
 
             # Clipboard
             if self.config.get("copy_to_clipboard"):
@@ -176,6 +216,8 @@ class WisprDrawer:
 
     def _on_screenshot_press(self):
         print("Recording + drawing mode...")
+        if self.wake_listener:
+            self.wake_listener.pause()
         self.recording_overlay.show()
         self.drawing_overlay.show()
         self.recorder.start()
@@ -186,6 +228,8 @@ class WisprDrawer:
         lines = self.drawing_overlay.get_drawing_lines()
         self.drawing_overlay.hide()
         self.recording_overlay.hide()
+        if self.wake_listener:
+            self.wake_listener.resume()
 
         threading.Thread(
             target=self._process_screenshot, args=(audio_data, lines), daemon=True
@@ -205,9 +249,10 @@ class WisprDrawer:
 
             # Transcribe if we have audio
             text = "[no audio]"
+            wav_path = None
             if audio_data is not None and len(audio_data) > 0:
                 if self.config.get("save_audio"):
-                    self.recorder.save_wav(audio_data, self.project_dir)
+                    wav_path = self.recorder.save_wav(audio_data, self.project_dir)
 
                 temp_path = self.recorder.save_temp_wav(audio_data)
                 api_key = self.config.get("openai_api_key")
@@ -215,7 +260,7 @@ class WisprDrawer:
                 print(f"Transcription: {text}")
 
             # Log annotation
-            append_annotation(self.project_dir, text, screenshot_path)
+            append_annotation(self.project_dir, text, screenshot_path, audio_path=wav_path)
 
             preview = text[:60] + "..." if len(text) > 60 else text
             show_toast(f"Screenshot saved with annotation: {preview}")
@@ -246,6 +291,8 @@ class WisprDrawer:
 
     def _quit(self):
         self.hotkey_manager.stop()
+        if self.wake_listener:
+            self.wake_listener.stop()
         if self._tray_icon:
             self._tray_icon.stop()
         self.root.after(0, self.root.destroy)

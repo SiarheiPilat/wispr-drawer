@@ -3,11 +3,17 @@ import os
 
 DEFAULT_CONFIG = {
     "openai_api_key": "",
-    "shortcut_a": "ctrl+shift+a",
+    "shortcut_a": "ctrl+win",
     "shortcut_b": "ctrl+shift+b",
     "copy_to_clipboard": True,
     "insert_at_caret": False,
     "save_audio": False,
+    "mic_device": None,
+    "wake_word_enabled": False,
+    "wake_word_model": "hey_jarvis",
+    "wake_word_sensitivity": 0.5,
+    "wake_word_silence_duration": 1.5,
+    "wake_word_max_duration": 15,
 }
 
 CONFIG_FILENAME = "config.json"

@@ -19,6 +19,8 @@ def parse_shortcut(shortcut_str: str) -> tuple:
             modifiers.add("shift")
         elif part in ("alt", "menu"):
             modifiers.add("alt")
+        elif part in ("win", "windows", "cmd", "super"):
+            modifiers.add("win")
         elif len(part) == 1 and part in _VK_CODES:
             vk = _VK_CODES[part]
         else:
@@ -73,6 +75,8 @@ class HotkeyManager:
             modifier = "shift"
         elif key in (keyboard.Key.alt_l, keyboard.Key.alt_r, keyboard.Key.alt_gr):
             modifier = "alt"
+        elif key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
+            modifier = "win"
         elif hasattr(key, 'vk') and key.vk is not None:
             vk = key.vk
         return modifier, vk
