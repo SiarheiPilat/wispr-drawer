@@ -15,10 +15,12 @@ class WakeWordListener:
 
     LISTENING = "listening"
     CAPTURING = "capturing"
+    CAPTURING_PLUS = "capturing_plus"
     PAUSED = "paused"
 
     def __init__(self, model_name, sensitivity, mic_device, on_command,
-                 sample_rate=16000, silence_duration=1.5, max_duration=15):
+                 sample_rate=16000, silence_duration=1.5, max_duration=15,
+                 capture_mode="silence", max_duration_plus=120):
         self.model_name = model_name
         self.sensitivity = sensitivity
         self.mic_device = mic_device
@@ -26,6 +28,8 @@ class WakeWordListener:
         self.sample_rate = sample_rate
         self.silence_duration = silence_duration
         self.max_duration = max_duration
+        self.capture_mode = capture_mode  # "silence" or "wake_word_stop"
+        self.max_duration_plus = max_duration_plus
 
         self._state = self.PAUSED
         self._stream = None
@@ -39,6 +43,9 @@ class WakeWordListener:
         # Frames needed for silence/max duration
         self._silence_frames_needed = int(silence_duration * sample_rate / _CHUNK_SIZE)
         self._max_frames = int(max_duration * sample_rate / _CHUNK_SIZE)
+        self._max_frames_plus = int(max_duration_plus * sample_rate / _CHUNK_SIZE)
+        # Frames to trim when stop wake word is detected (~1 second of audio)
+        self._stop_trim_frames = int(1.0 * sample_rate / _CHUNK_SIZE)
 
         # Load model (onnx only, no tflite needed)
         self._oww_model = openwakeword.Model(
@@ -102,21 +109,27 @@ class WakeWordListener:
             self._handle_listening(chunk)
         elif state == self.CAPTURING:
             self._handle_capturing(chunk)
+        elif state == self.CAPTURING_PLUS:
+            self._handle_capturing_plus(chunk)
 
     def _handle_listening(self, chunk):
         prediction = self._oww_model.predict(chunk)
         score = prediction.get(self._model_key, 0)
 
         if score >= self.sensitivity:
+            new_state = self.CAPTURING_PLUS if self.capture_mode == "wake_word_stop" else self.CAPTURING
             with self._lock:
-                self._state = self.CAPTURING
+                self._state = new_state
                 self._capture_frames = []
                 self._silence_frames = 0
                 self._capture_frames_total = 0
             self._oww_model.reset()
             # Beep on a thread so we don't block the audio callback
             threading.Thread(target=lambda: winsound.Beep(800, 200), daemon=True).start()
-            print("Wake word detected! Listening for command...")
+            if new_state == self.CAPTURING_PLUS:
+                print("Wake word detected! Continuous capture — say wake word again to stop.")
+            else:
+                print("Wake word detected! Listening for command...")
 
     def _handle_capturing(self, chunk):
         # Convert int16 to float32 for storage (matching AudioRecorder output)
@@ -146,6 +159,49 @@ class WakeWordListener:
             with self._lock:
                 self._state = self.LISTENING
                 self._capture_frames = []
+
+            if frames:
+                audio_data = np.concatenate(frames).reshape(-1, 1)
+                threading.Thread(
+                    target=self.on_command, args=(audio_data,), daemon=True
+                ).start()
+            else:
+                print("No command audio captured.")
+
+    def _handle_capturing_plus(self, chunk):
+        """Continuous capture mode — records until wake word is said again."""
+        float_chunk = chunk.astype(np.float32) / 32768.0
+        self._capture_frames.append(float_chunk)
+        self._capture_frames_total += 1
+
+        # Run wake word detection on each chunk to detect stop signal
+        prediction = self._oww_model.predict(chunk)
+        score = prediction.get(self._model_key, 0)
+        wake_word_stop = score >= self.sensitivity
+
+        # Check end conditions: wake word again OR safety max duration
+        done = wake_word_stop or self._capture_frames_total >= self._max_frames_plus
+
+        if done:
+            # Trim last ~1s to remove the stop wake word utterance
+            trim = min(self._stop_trim_frames, len(self._capture_frames))
+            if wake_word_stop and trim > 0:
+                frames = self._capture_frames[:-trim]
+            else:
+                frames = self._capture_frames
+
+            with self._lock:
+                self._state = self.LISTENING
+                self._capture_frames = []
+            self._oww_model.reset()
+
+            # Stop beep: lower tone, slightly longer than start beep
+            threading.Thread(target=lambda: winsound.Beep(600, 300), daemon=True).start()
+
+            if wake_word_stop:
+                print("Wake word stop detected. Processing continuous capture...")
+            else:
+                print("Max duration reached. Processing continuous capture...")
 
             if frames:
                 audio_data = np.concatenate(frames).reshape(-1, 1)

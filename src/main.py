@@ -130,6 +130,8 @@ class WisprDrawer:
             return
 
         try:
+            mode = self.config.get("wake_word_mode")
+            capture_mode = "wake_word_stop" if mode == "ai_actor_plus" else "silence"
             self.wake_listener = WakeWordListener(
                 model_name=self.config.get("wake_word_model"),
                 sensitivity=self.config.get("wake_word_sensitivity"),
@@ -137,6 +139,8 @@ class WisprDrawer:
                 on_command=self._on_wake_command,
                 silence_duration=self.config.get("wake_word_silence_duration"),
                 max_duration=self.config.get("wake_word_max_duration"),
+                capture_mode=capture_mode,
+                max_duration_plus=self.config.get("wake_word_max_duration_plus"),
             )
             self.wake_listener.start()
         except Exception as e:
@@ -146,7 +150,7 @@ class WisprDrawer:
     def _on_wake_command(self, audio_data):
         """Handle voice command captured after wake word."""
         mode = self.config.get("wake_word_mode")
-        if mode == "ai_actor":
+        if mode in ("ai_actor", "ai_actor_plus"):
             self._process_ai_actor(audio_data)
         else:
             self._process_voice_memo(audio_data)
@@ -164,7 +168,12 @@ class WisprDrawer:
             print(f"AI Actor command: {text}")
 
             show_toast(f"Sending to Claude: {text[:60]}...")
-            send_to_claude(text, working_dir=self.project_dir)
+            send_to_claude(
+                text,
+                working_dir=self.project_dir,
+                delivery=self.config.get("claude_delivery"),
+                terminal_title=self.config.get("claude_terminal_title"),
+            )
 
         except Exception as e:
             print(f"AI Actor error: {e}")

@@ -38,6 +38,32 @@ Saves to your project folder:
 * `screenshots/YYYY-MM-DD_HH-MM-SS.png` — screenshot with drawings
 * `annotations.jsonl` — transcription with reference to the screenshot
 
+### Wake Word Modes
+
+Enable wake word detection in Settings to use hands-free voice commands. Say the configured wake word (default: "hey jarvis") to activate.
+
+**Simple Input** — Transcribes your voice and inserts text at the caret (same as Voice Memo, but hands-free).
+
+**AI Actor** — Say the wake word, speak a single command (stops on silence), and it gets sent to Claude Code in a terminal window.
+
+**AI Actor Plus** — Say the wake word, speak **continuously** for as long as you want (pauses won't stop recording), then say the wake word **again** to stop. All accumulated speech is transcribed and sent to Claude Code at once. A lower-pitched beep confirms the stop.
+
+Settings for wake word modes:
+
+* **Sensitivity** (0.1–0.9) — wake word detection confidence threshold
+* **Silence wait** — seconds of silence to end capture (AI Actor only)
+* **Max command** — safety limit in seconds (AI Actor)
+* **Max command — Plus** — safety limit in seconds for AI Actor Plus (default 120s)
+
+### Claude Delivery
+
+Controls how transcribed commands reach Claude Code:
+
+* **New Session** (default) — opens a new terminal window and runs `claude --print` each time. Stateless — each command is independent.
+* **Attached Terminal** — pastes the transcribed text into an existing terminal window and presses Enter. Stateful — Claude remembers conversation context. Start a `claude` session in your terminal first, then use this mode.
+
+When using Attached Terminal, set **Terminal window title** to a substring of the target window's title (e.g. "claude" or "Windows PowerShell"). If left empty, the command is sent to whichever window is in the foreground.
+
 ### System Tray
 
 Right-click the tray icon for:
@@ -69,7 +95,16 @@ Right-click the tray icon for:
   "shortcut_b": "ctrl+shift+b",
   "copy_to_clipboard": true,
   "insert_at_caret": false,
-  "save_audio": false
+  "save_audio": false,
+  "wake_word_enabled": false,
+  "wake_word_mode": "simple_input",
+  "wake_word_model": "hey_jarvis",
+  "wake_word_sensitivity": 0.5,
+  "wake_word_silence_duration": 1.5,
+  "wake_word_max_duration": 15,
+  "wake_word_max_duration_plus": 120,
+  "claude_delivery": "new_session",
+  "claude_terminal_title": ""
 }
 ```
 

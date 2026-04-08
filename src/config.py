@@ -15,6 +15,9 @@ DEFAULT_CONFIG = {
     "wake_word_sensitivity": 0.5,
     "wake_word_silence_duration": 1.5,
     "wake_word_max_duration": 15,
+    "wake_word_max_duration_plus": 120,
+    "claude_delivery": "new_session",
+    "claude_terminal_title": "",
 }
 
 CONFIG_FILENAME = "config.json"

@@ -18,7 +18,7 @@ class SettingsWindow:
 
         self._window = tk.Toplevel()
         self._window.title("Wispr Drawer — Settings")
-        self._window.geometry("450x650")
+        self._window.geometry("450x750")
         self._window.resizable(False, False)
 
         frame = ttk.Frame(self._window, padding=20)
@@ -85,8 +85,16 @@ class SettingsWindow:
             row=9, column=0, columnspan=2, sticky="w", pady=2
         )
 
-        _MODE_LABELS = {"simple_input": "Simple Input", "ai_actor": "AI Actor (Claude Code)"}
-        _MODE_VALUES = {"Simple Input": "simple_input", "AI Actor (Claude Code)": "ai_actor"}
+        _MODE_LABELS = {
+            "simple_input": "Simple Input",
+            "ai_actor": "AI Actor (Claude Code)",
+            "ai_actor_plus": "AI Actor Plus (Claude Code)",
+        }
+        _MODE_VALUES = {
+            "Simple Input": "simple_input",
+            "AI Actor (Claude Code)": "ai_actor",
+            "AI Actor Plus (Claude Code)": "ai_actor_plus",
+        }
         ttk.Label(frame, text="Wake Word Mode:").grid(row=10, column=0, sticky="w", pady=(0, 5))
         self._wake_mode_var = tk.StringVar(value=_MODE_LABELS.get(self.config.get("wake_word_mode"), "Simple Input"))
         self._wake_mode_values = _MODE_VALUES
@@ -119,9 +127,36 @@ class SettingsWindow:
             row=14, column=1, sticky="w", pady=(0, 5)
         )
 
+        ttk.Label(frame, text="Max command — Plus (sec):").grid(row=15, column=0, sticky="w", pady=(0, 5))
+        self._wake_max_plus_var = tk.DoubleVar(value=self.config.get("wake_word_max_duration_plus"))
+        ttk.Spinbox(frame, from_=30, to=300, increment=30, textvariable=self._wake_max_plus_var, width=10).grid(
+            row=15, column=1, sticky="w", pady=(0, 5)
+        )
+
+        # Claude Delivery
+        ttk.Separator(frame, orient="horizontal").grid(row=16, column=0, columnspan=2, sticky="ew", pady=10)
+
+        _DELIVERY_LABELS = {"new_session": "New Session", "attached": "Attached Terminal"}
+        _DELIVERY_VALUES = {"New Session": "new_session", "Attached Terminal": "attached"}
+        ttk.Label(frame, text="Claude Delivery:").grid(row=17, column=0, sticky="w", pady=(0, 5))
+        self._delivery_var = tk.StringVar(
+            value=_DELIVERY_LABELS.get(self.config.get("claude_delivery"), "New Session")
+        )
+        self._delivery_values = _DELIVERY_VALUES
+        ttk.Combobox(frame, textvariable=self._delivery_var,
+                      values=list(_DELIVERY_LABELS.values()), state="readonly", width=37).grid(
+            row=17, column=1, sticky="ew", pady=(0, 5)
+        )
+
+        ttk.Label(frame, text="Terminal window title:").grid(row=18, column=0, sticky="w", pady=(0, 5))
+        self._terminal_title_var = tk.StringVar(value=self.config.get("claude_terminal_title"))
+        ttk.Entry(frame, textvariable=self._terminal_title_var, width=40).grid(
+            row=18, column=1, sticky="ew", pady=(0, 5)
+        )
+
         # Buttons
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=15, column=0, columnspan=2, pady=(20, 0))
+        btn_frame.grid(row=19, column=0, columnspan=2, pady=(20, 0))
         ttk.Button(btn_frame, text="Save", command=self._save).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Cancel", command=self._window.destroy).pack(side="left", padx=5)
 
@@ -155,6 +190,9 @@ class SettingsWindow:
         self.config.set("wake_word_sensitivity", round(self._wake_sensitivity_var.get(), 2))
         self.config.set("wake_word_silence_duration", round(self._wake_silence_var.get(), 1))
         self.config.set("wake_word_max_duration", round(self._wake_max_var.get(), 1))
+        self.config.set("wake_word_max_duration_plus", round(self._wake_max_plus_var.get(), 1))
+        self.config.set("claude_delivery", self._delivery_values.get(self._delivery_var.get(), "new_session"))
+        self.config.set("claude_terminal_title", self._terminal_title_var.get().strip())
 
         if self.on_save:
             self.on_save()
