@@ -18,7 +18,7 @@ class SettingsWindow:
 
         self._window = tk.Toplevel()
         self._window.title("Wispr Drawer — Settings")
-        self._window.geometry("450x530")
+        self._window.geometry("450x600")
         self._window.resizable(False, False)
 
         frame = ttk.Frame(self._window, padding=20)
@@ -97,9 +97,21 @@ class SettingsWindow:
             row=11, column=1, sticky="ew", pady=(0, 5)
         )
 
+        ttk.Label(frame, text="Silence wait (sec):").grid(row=12, column=0, sticky="w", pady=(0, 5))
+        self._wake_silence_var = tk.DoubleVar(value=self.config.get("wake_word_silence_duration"))
+        ttk.Spinbox(frame, from_=0.5, to=5.0, increment=0.5, textvariable=self._wake_silence_var, width=10).grid(
+            row=12, column=1, sticky="w", pady=(0, 5)
+        )
+
+        ttk.Label(frame, text="Max command (sec):").grid(row=13, column=0, sticky="w", pady=(0, 5))
+        self._wake_max_var = tk.DoubleVar(value=self.config.get("wake_word_max_duration"))
+        ttk.Spinbox(frame, from_=5, to=60, increment=5, textvariable=self._wake_max_var, width=10).grid(
+            row=13, column=1, sticky="w", pady=(0, 5)
+        )
+
         # Buttons
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=12, column=0, columnspan=2, pady=(20, 0))
+        btn_frame.grid(row=14, column=0, columnspan=2, pady=(20, 0))
         ttk.Button(btn_frame, text="Save", command=self._save).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Cancel", command=self._window.destroy).pack(side="left", padx=5)
 
@@ -130,6 +142,8 @@ class SettingsWindow:
         self.config.set("wake_word_enabled", self._wake_enabled_var.get())
         self.config.set("wake_word_model", self._wake_model_var.get().strip())
         self.config.set("wake_word_sensitivity", round(self._wake_sensitivity_var.get(), 2))
+        self.config.set("wake_word_silence_duration", round(self._wake_silence_var.get(), 1))
+        self.config.set("wake_word_max_duration", round(self._wake_max_var.get(), 1))
 
         if self.on_save:
             self.on_save()
